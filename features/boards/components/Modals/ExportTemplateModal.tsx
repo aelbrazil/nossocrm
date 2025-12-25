@@ -87,7 +87,6 @@ function buildJourneyFromBoards(
   };
 }
 
-type Mode = 'board' | 'journey';
 type Panel = 'export' | 'import';
 
 function buildDefaultJourneyName(selectedBoards: Board[]) {
@@ -142,7 +141,6 @@ export function ExportTemplateModal(props: {
   const { addToast } = useToast();
 
   const [panel, setPanel] = useState<Panel>('export');
-  const [mode, setMode] = useState<Mode>('journey');
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const [showTechnicalDetails, setShowTechnicalDetails] = useState(false);
   const [showPasteImport, setShowPasteImport] = useState(false);
@@ -160,7 +158,6 @@ export function ExportTemplateModal(props: {
     if (!isOpen) return;
     // Reset to a predictable state on open.
     setPanel('export');
-    setMode('journey');
     setAdvancedOpen(false);
     setShowTechnicalDetails(false);
     setShowPasteImport(false);
@@ -190,35 +187,25 @@ export function ExportTemplateModal(props: {
     return selectedBoardIds.map(id => byId.get(id)).filter(Boolean) as Board[];
   }, [boards, selectedBoardIds]);
 
-  // UX: when exporting a journey, keep a friendly default name, but never overwrite user edits.
+  // UX: keep a friendly default name, but never overwrite user edits.
   useEffect(() => {
-    if (mode !== 'journey') return;
     if (journeyNameDirty) return;
     setJourneyName(buildDefaultJourneyName(selectedBoards));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mode, selectedBoards]);
+  }, [selectedBoards]);
 
   const journeyJson = useMemo(() => {
-    if (mode === 'board') {
-      return buildJourneyFromBoards({
-        schemaVersion,
-        journeyName: activeBoard.name,
-        boards: [activeBoard],
-        slugPrefix: slugPrefix.trim() || undefined,
-      });
-    }
-
     return buildJourneyFromBoards({
       schemaVersion,
       journeyName: journeyName.trim() || undefined,
       boards: selectedBoards,
       slugPrefix: slugPrefix.trim() || undefined,
     });
-  }, [mode, schemaVersion, slugPrefix, activeBoard, journeyName, selectedBoards]);
+  }, [schemaVersion, slugPrefix, journeyName, selectedBoards]);
 
   const journeyJsonText = useMemo(() => JSON.stringify(journeyJson, null, 2), [journeyJson]);
 
-  const canExportJourney = mode === 'journey' ? selectedBoards.length > 0 : true;
+  const canExportJourney = selectedBoards.length > 0;
 
   const toggleBoard = (boardId: string) => {
     setSelectedBoardIds(prev => {
@@ -276,7 +263,6 @@ export function ExportTemplateModal(props: {
       const filename = `${base || 'journey'}.journey.json`;
       // Debug trace: helps diagnose user reports like "click does nothing".
       console.info('[ExportTemplateModal] download click', {
-        mode,
         filename,
         schemaVersion,
         selectedBoards: selectedBoards.map(b => ({ id: b.id, name: b.name, stages: b.stages.length })),
@@ -488,27 +474,8 @@ export function ExportTemplateModal(props: {
           <div className="text-sm font-semibold text-slate-900 dark:text-white">
             Exportar template
           </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <button
-              type="button"
-              onClick={() => setMode('board')}
-              className={`px-3 py-2 rounded-lg text-sm font-semibold border transition-colors ${mode === 'board'
-                ? 'bg-primary-600 text-white border-primary-600'
-                : 'bg-white dark:bg-white/5 text-slate-700 dark:text-slate-200 border-slate-200 dark:border-white/10 hover:bg-slate-50 dark:hover:bg-white/10'
-                }`}
-            >
-              Board
-            </button>
-            <button
-              type="button"
-              onClick={() => setMode('journey')}
-              className={`px-3 py-2 rounded-lg text-sm font-semibold border transition-colors ${mode === 'journey'
-                ? 'bg-primary-600 text-white border-primary-600'
-                : 'bg-white dark:bg-white/5 text-slate-700 dark:text-slate-200 border-slate-200 dark:border-white/10 hover:bg-slate-50 dark:hover:bg-white/10'
-                }`}
-            >
-              Jornada
-            </button>
+          <div className="text-xs text-slate-500 dark:text-slate-400">
+            Selecione 1 board (template simples) ou vários (jornada).
           </div>
         </div>
       )}
@@ -522,65 +489,61 @@ export function ExportTemplateModal(props: {
               Esse arquivo é o que você vai guardar/publicar na comunidade.
             </div>
 
-            {mode === 'journey' && (
-              <div className="mt-4">
-                <label className="block text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1">
-                  Nome (aparece na comunidade)
-                </label>
-                <input
-                  value={journeyName}
-                  onChange={e => { setJourneyName(e.target.value); setJourneyNameDirty(true); }}
-                  className="w-full rounded-lg border border-slate-200 dark:border-white/10 bg-white dark:bg-white/5 px-3 py-2 text-sm"
-                />
-              </div>
-            )}
+            <div className="mt-4">
+              <label className="block text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1">
+                Nome (aparece na comunidade)
+              </label>
+              <input
+                value={journeyName}
+                onChange={e => { setJourneyName(e.target.value); setJourneyNameDirty(true); }}
+                className="w-full rounded-lg border border-slate-200 dark:border-white/10 bg-white dark:bg-white/5 px-3 py-2 text-sm"
+              />
+            </div>
 
-            {mode === 'journey' && (
-              <div className="mt-4">
-                <div className="text-xs font-semibold text-slate-600 dark:text-slate-300 mb-2">boards da jornada (ordem importa)</div>
-                <div className="text-xs text-slate-500 dark:text-slate-400 mb-2">
-                  <b>Ordem que será exportada:</b> {selectedBoards.map(b => b.name).join(' → ') || '(nenhum)'}
-                </div>
-                <div className="rounded-lg border border-slate-200 dark:border-white/10 bg-white dark:bg-white/5 p-2 max-h-64 overflow-auto space-y-1">
-                  {boards.map(b => {
-                    const checked = selectedBoardIds.includes(b.id);
-                    const isSelected = checked;
-                    return (
-                      <div key={b.id} className="flex items-center justify-between gap-2 px-2 py-1 rounded-md hover:bg-slate-50 dark:hover:bg-white/10">
-                        <label className="flex items-center gap-2 text-sm text-slate-800 dark:text-slate-200 cursor-pointer">
-                          <input
-                            type="checkbox"
-                            checked={checked}
-                            onChange={() => toggleBoard(b.id)}
-                          />
-                          <span className="truncate">{b.name}</span>
-                        </label>
-                        {isSelected && (
-                          <div className="flex items-center gap-1 shrink-0">
-                            <button
-                              type="button"
-                              onClick={() => moveSelected(b.id, -1)}
-                              className="p-1 rounded hover:bg-slate-100 dark:hover:bg-white/10"
-                              aria-label="Mover para cima"
-                            >
-                              <ArrowUp size={14} />
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => moveSelected(b.id, 1)}
-                              className="p-1 rounded hover:bg-slate-100 dark:hover:bg-white/10"
-                              aria-label="Mover para baixo"
-                            >
-                              <ArrowDown size={14} />
-                            </button>
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
+            <div className="mt-4">
+              <div className="text-xs font-semibold text-slate-600 dark:text-slate-300 mb-2">boards da jornada (ordem importa)</div>
+              <div className="text-xs text-slate-500 dark:text-slate-400 mb-2">
+                <b>Ordem que será exportada:</b> {selectedBoards.map(b => b.name).join(' → ') || '(nenhum)'}
               </div>
-            )}
+              <div className="rounded-lg border border-slate-200 dark:border-white/10 bg-white dark:bg-white/5 p-2 max-h-64 overflow-auto space-y-1">
+                {boards.map(b => {
+                  const checked = selectedBoardIds.includes(b.id);
+                  const isSelected = checked;
+                  return (
+                    <div key={b.id} className="flex items-center justify-between gap-2 px-2 py-1 rounded-md hover:bg-slate-50 dark:hover:bg-white/10">
+                      <label className="flex items-center gap-2 text-sm text-slate-800 dark:text-slate-200 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          onChange={() => toggleBoard(b.id)}
+                        />
+                        <span className="truncate">{b.name}</span>
+                      </label>
+                      {isSelected && (
+                        <div className="flex items-center gap-1 shrink-0">
+                          <button
+                            type="button"
+                            onClick={() => moveSelected(b.id, -1)}
+                            className="p-1 rounded hover:bg-slate-100 dark:hover:bg-white/10"
+                            aria-label="Mover para cima"
+                          >
+                            <ArrowUp size={14} />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => moveSelected(b.id, 1)}
+                            className="p-1 rounded hover:bg-slate-100 dark:hover:bg-white/10"
+                            aria-label="Mover para baixo"
+                          >
+                            <ArrowDown size={14} />
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
 
             <div className="mt-4 flex items-center gap-2">
               <button
