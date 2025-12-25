@@ -20,6 +20,7 @@
   - UX (Boards): modal **Criar Novo Board** agora é **responsivo em telas menores** (mobile quase full-screen com scroll interno; modo chat vira coluna no mobile e só divide em 2 colunas no desktop).
   - UX (Boards): refinado sizing do modal do Wizard para não “inflar” em telas maiores (mobile `h-full`, desktop `h-auto` + `max-w` menor).
   - UX (Boards): modal do Wizard agora tem **hard cap por viewport** (`max-w: calc(100vw - padding)` / `max-h: calc(100dvh - padding)`) para evitar overflow em telas pequenas.
+  - UX (Boards): Wizard “Criar Novo Board” ganhou tela inicial **Jobs-style** (3 escolhas grandes: do zero / playbook recomendado / template individual) e só depois mostra as listas, reduzindo fricção e “poluição” visual.
 
 ## 24/12/2025
 
