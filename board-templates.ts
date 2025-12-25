@@ -116,15 +116,15 @@ export const BOARD_TEMPLATES: Record<BoardTemplateType, BoardTemplate> = {
   },
 
   CS: {
-    name: 'CS & Upsell',
-    description: 'Gestão de clientes ativos e oportunidades de expansão',
+    name: 'CS (Saúde da Conta)',
+    description: 'Gestão de saúde do cliente e risco de churn (não é pipeline comercial)',
     emoji: '❤️',
     linkedLifecycleStage: 'CUSTOMER',
-    tags: ['Retenção', 'Upsell', 'Relacionamento'],
+    tags: ['Retenção', 'Health Score', 'Churn'],
     stages: [
       { label: 'Saudável', color: 'bg-green-500', linkedLifecycleStage: 'CUSTOMER' },
-      { label: 'Oportunidade Upsell', color: 'bg-blue-500', linkedLifecycleStage: 'CUSTOMER' },
       { label: 'Em Risco', color: 'bg-yellow-500', linkedLifecycleStage: 'CUSTOMER' },
+      { label: 'Crítico', color: 'bg-orange-500', linkedLifecycleStage: 'CUSTOMER' },
       { label: 'Churn', color: 'bg-red-500', linkedLifecycleStage: 'OTHER' },
     ],
     // For CS boards, "Churn" behaves like a loss stage.
@@ -133,15 +133,15 @@ export const BOARD_TEMPLATES: Record<BoardTemplateType, BoardTemplate> = {
       name: 'Account Manager',
       role: 'Gerente de Contas',
       behavior:
-        'Monitore a saúde da conta. Identifique oportunidades de expansão (Upsell/Cross-sell) e aja proativamente para evitar cancelamentos (Churn).',
+        'Monitore a saúde da conta com sinais objetivos (uso, tickets, engajamento). Aja proativamente para evitar churn e garantir valor contínuo.',
     },
     goal: {
-      description: 'Aumentar a receita da base (Expansion MRR) e reduzir Churn.',
-      kpi: 'Expansion MRR',
-      targetValue: '10000',
-      type: 'currency',
+      description: 'Reduzir churn e manter saúde da base (GRR).',
+      kpi: 'GRR',
+      targetValue: '95',
+      type: 'percentage',
     },
-    entryTrigger: 'Clientes ativos após o período de Onboarding.',
+    entryTrigger: 'Clientes após o Go Live (fim do Onboarding).',
   },
 
   CUSTOM: CUSTOM_TEMPLATE,

@@ -11,6 +11,7 @@
   - Fix de resiliência: `dealsService.create` agora tenta recuperar `organization_id` via `profiles` se o board estiver com `organization_id` vazio, e faz um repair best-effort do board em background.
   - Fix (Next/React): removido warning de **hydration mismatch** no header (botão de debug) inicializando o estado do debug de forma determinística no SSR e sincronizando com `localStorage` somente no client.
   - Fix (Settings): “💣 Zerar Database” agora limpa primeiro `boards.won_stage_id/lost_stage_id/next_board_id` antes de deletar `board_stages`, evitando erro de FK (`boards_won_stage_id_fkey`).
+  - Templates (mercado): CS foi separado em **CS (Saúde da Conta)** (health/risk/churn) e **Expansão (Upsell)** virou um **pipeline comercial separado** na jornada B2B (não auto-encadeado por padrão).
 
 ## 24/12/2025
 

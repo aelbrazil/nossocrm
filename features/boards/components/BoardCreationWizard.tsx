@@ -250,6 +250,7 @@ export const BoardCreationWizard: React.FC<BoardCreationWizardProps> = ({
       sales: BOARD_TEMPLATES.SALES.linkedLifecycleStage,
       onboarding: BOARD_TEMPLATES.ONBOARDING.linkedLifecycleStage,
       cs: BOARD_TEMPLATES.CS.linkedLifecycleStage,
+      expansion: 'CUSTOMER',
     };
 
     // Install all boards in the journey with sequential order
@@ -269,6 +270,7 @@ export const BoardCreationWizard: React.FC<BoardCreationWizardProps> = ({
         sales: 'SALES',
         onboarding: 'ONBOARDING',
         cs: 'CS',
+        expansion: 'CUSTOM',
       };
       const template = BOARD_TEMPLATES[templateBySlug[boardDef.slug] ?? 'CUSTOM'];
       const guessed = guessWonLostStageIds(boardStages, {
@@ -299,11 +301,28 @@ export const BoardCreationWizard: React.FC<BoardCreationWizardProps> = ({
       }
     }
 
-    // Link boards sequentially (handoff) for official journeys.
-    // This enables: SDR → Sales → Onboarding → CS, when deals reach "success" stages.
-    if (onUpdateBoardAsync && createdBoards.length > 1) {
-      for (let i = 0; i < createdBoards.length - 1; i += 1) {
-        await onUpdateBoardAsync(createdBoards[i].id, { nextBoardId: createdBoards[i + 1].id });
+    // Link boards with an explicit handoff chain for official journeys.
+    // Market-aligned: keep the core revenue journey chained (SDR → Sales → Onboarding → CS Health).
+    // Expansion/Upsell is a separate commercial pipeline and should NOT be auto-chained by default.
+    if (onUpdateBoardAsync && createdBoards.length > 0) {
+      const bySlug = new Map<string, Board>();
+      for (let i = 0; i < createdBoards.length; i += 1) {
+        bySlug.set(journey.boards[i]?.slug, createdBoards[i]);
+      }
+
+      const chain: Array<[string, string | null]> = [
+        ['sdr', 'sales'],
+        ['sales', 'onboarding'],
+        ['onboarding', 'cs'],
+        ['cs', null],
+        // expansion intentionally left unlinked
+      ];
+
+      for (const [from, to] of chain) {
+        const fromBoard = bySlug.get(from);
+        if (!fromBoard) continue;
+        const toBoard = to ? bySlug.get(to) : undefined;
+        await onUpdateBoardAsync(fromBoard.id, { nextBoardId: toBoard?.id });
       }
     }
 
