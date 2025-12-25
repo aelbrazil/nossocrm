@@ -40,22 +40,30 @@ export const StageProgressBar: React.FC<StageProgressBarProps> = ({
                                 const isWonStage = stage.linkedLifecycleStage === 'CUSTOMER';
                                 const isLostStage = stage.linkedLifecycleStage === 'OTHER';
 
+                                // Jony-style: only the *current* step carries color.
+                                // Everything else is neutral, with consistent hierarchy.
                                 const dotSize = isCurrent ? 'h-3 w-3' : 'h-2.5 w-2.5';
-                                const dotColor = isLostStage ? 'bg-red-500' : isWonStage ? 'bg-green-500' : (stage.color || 'bg-primary-500');
+                                const currentDotColor = isLostStage
+                                    ? 'bg-red-500'
+                                    : isWonStage
+                                        ? 'bg-green-500'
+                                        : (stage.color || 'bg-primary-500');
+
                                 const dotClass = isCurrent
-                                    ? `${dotSize} ${dotColor} shadow-sm`
+                                    ? `${dotSize} ${currentDotColor} shadow-sm shadow-black/10`
                                     : isPast
-                                        ? `${dotSize} ${dotColor} opacity-60`
-                                        : `${dotSize} bg-slate-300 dark:bg-white/10`;
+                                        ? `${dotSize} bg-slate-400/80 dark:bg-white/20`
+                                        : `${dotSize} bg-slate-300/70 dark:bg-white/10`;
 
                                 const labelClass = isCurrent
-                                    ? 'text-slate-900 dark:text-white'
+                                    ? 'text-slate-900 dark:text-white font-semibold'
                                     : isPast
-                                        ? 'text-slate-600 dark:text-slate-300'
-                                        : 'text-slate-500 dark:text-slate-400';
+                                        ? 'text-slate-600 dark:text-slate-300 font-medium'
+                                        : 'text-slate-500 dark:text-slate-400 font-medium';
 
+                                // Neutral connectors (past slightly stronger, but never colored).
                                 const connectorClass = index < currentIndex
-                                    ? 'bg-slate-400/70 dark:bg-white/20'
+                                    ? 'bg-slate-300 dark:bg-white/15'
                                     : 'bg-slate-200 dark:bg-white/10';
 
                                 return (
@@ -64,11 +72,14 @@ export const StageProgressBar: React.FC<StageProgressBarProps> = ({
                                             type="button"
                                             onClick={() => onStageClick(stage.id)}
                                             aria-current={isCurrent ? 'step' : undefined}
-                                            className={`inline-flex items-center gap-2 rounded-lg px-2 py-1 outline-none transition-colors hover:bg-slate-100 dark:hover:bg-white/5 focus-visible:ring-2 focus-visible:ring-primary-500/40`}
+                                            // "Invisible" affordance: clickable but not a chip.
+                                            className={`group inline-flex items-center gap-2 rounded-md px-0.5 py-1 outline-none transition-colors focus-visible:ring-2 focus-visible:ring-primary-500/40`}
                                             title={stage.label}
                                         >
                                             <span className={`rounded-full ${dotClass}`} />
-                                            <span className={`text-xs font-semibold whitespace-nowrap ${labelClass}`}>
+                                            <span
+                                                className={`text-xs whitespace-nowrap ${labelClass} underline-offset-4 group-hover:underline`}
+                                            >
                                                 {stage.label}
                                             </span>
                                         </button>

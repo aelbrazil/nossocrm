@@ -36,6 +36,7 @@
   - UX (Cockpit): rota `/deals/[dealId]/cockpit` agora abre o **cockpit “original” do modo Focus (Inbox)**. A V2 ficou isolada em `/deals/[dealId]/cockpit-v2` e `/labs/deal-cockpit-mock`.
   - UX (Deals): removido o botão **Cockpit** do modal de detalhes do deal (mantemos o cockpit pelo modo Focus).
   - UX (Deals): barra de estágios no modal do deal agora aparece como **linha do tempo (status)** — mais baixa e discreta, evitando parecer um “menu”.
+  - UX (Deals): refinada a “linha do tempo” de estágios (estilo mais clean): **apenas o estágio atual em cor**, demais neutros, conectores discretos e interação sem “cara de botão”.
 
 ## 24/12/2025
 
