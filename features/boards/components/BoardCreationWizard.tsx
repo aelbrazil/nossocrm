@@ -72,6 +72,8 @@ export const BoardCreationWizard: React.FC<BoardCreationWizardProps> = ({
     'select'
   );
   const [selectedPlaybookId, setSelectedPlaybookId] = useState<string | null>(null);
+  // Optional journey flags (shown before installing certain journeys)
+  const [includeSubscriptionRenewals, setIncludeSubscriptionRenewals] = useState(false);
   const [aiInput, setAiInput] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
   const [generatedBoard, setGeneratedBoard] = useState<GeneratedBoard | null>(null);
@@ -126,6 +128,56 @@ export const BoardCreationWizard: React.FC<BoardCreationWizardProps> = ({
     setChatMessages([]);
     setChatInput('');
     setSelectedPlaybookId(null); // Reset selected playbook
+    setIncludeSubscriptionRenewals(false);
+  };
+
+  const buildRenewalsBoard = () => {
+    return {
+      slug: 'renewals',
+      name: 'Renovações (Assinatura)',
+      columns: [
+        { name: '180+ dias', color: 'bg-blue-500', linkedLifecycleStage: 'CUSTOMER' },
+        { name: '120 dias', color: 'bg-purple-500', linkedLifecycleStage: 'CUSTOMER' },
+        { name: '90 dias', color: 'bg-yellow-500', linkedLifecycleStage: 'CUSTOMER' },
+        { name: '60 dias', color: 'bg-orange-500', linkedLifecycleStage: 'CUSTOMER' },
+        { name: '30 dias', color: 'bg-orange-500', linkedLifecycleStage: 'CUSTOMER' },
+        { name: 'Renovado (Ganho)', color: 'bg-green-500', linkedLifecycleStage: 'CUSTOMER' },
+        { name: 'Cancelado (Perdido)', color: 'bg-red-500', linkedLifecycleStage: 'OTHER' },
+      ],
+      strategy: {
+        agentPersona: {
+          name: 'CS Renewals',
+          role: 'Renovações',
+          behavior:
+            'Trate renovações com rigor comercial. Antecipe risco, mostre valor, alinhe stakeholders e remova fricção do pagamento.',
+        },
+        goal: {
+          description: 'Aumentar taxa de renovação e previsibilidade.',
+          kpi: 'Renewal Rate',
+          targetValue: '90',
+          type: 'percentage',
+        },
+        entryTrigger:
+          'Assinantes com data de renovação aproximando. (Pode ser criado manualmente ou via automação futura.)',
+      },
+    };
+  };
+
+  const getJourneyForInstall = (journeyId: string) => {
+    const base = OFFICIAL_JOURNEYS[journeyId];
+    if (!base) return null;
+
+    // Only Infoproducer exposes the optional "subscription renewals" step for now.
+    if (journeyId !== 'INFOPRODUCER' || !includeSubscriptionRenewals) return base;
+
+    // Insert renewals after CS health (market-aligned) and keep expansion separate.
+    const renewalsBoard = buildRenewalsBoard();
+    const nextBoards = [...base.boards];
+    const csIndex = nextBoards.findIndex(b => b.slug === 'cs');
+    const insertAt = csIndex >= 0 ? csIndex + 1 : nextBoards.length;
+    nextBoards.splice(insertAt, 0, renewalsBoard);
+
+    return { ...base, boards: nextBoards };
   };
 
   const handleTemplateSelect = (templateType: BoardTemplateType) => {
@@ -240,7 +292,7 @@ export const BoardCreationWizard: React.FC<BoardCreationWizardProps> = ({
 
   const handleInstallOfficialJourney = async (journeyId: string) => {
     if (!OFFICIAL_JOURNEYS) return;
-    const journey = OFFICIAL_JOURNEYS[journeyId];
+    const journey = getJourneyForInstall(journeyId);
     if (!journey) return;
 
     // For official journeys we can safely set the board-level lifecycle linkage,
@@ -250,6 +302,7 @@ export const BoardCreationWizard: React.FC<BoardCreationWizardProps> = ({
       sales: BOARD_TEMPLATES.SALES.linkedLifecycleStage,
       onboarding: BOARD_TEMPLATES.ONBOARDING.linkedLifecycleStage,
       cs: BOARD_TEMPLATES.CS.linkedLifecycleStage,
+      renewals: 'CUSTOMER',
       expansion: 'CUSTOMER',
     };
 
@@ -270,6 +323,7 @@ export const BoardCreationWizard: React.FC<BoardCreationWizardProps> = ({
         sales: 'SALES',
         onboarding: 'ONBOARDING',
         cs: 'CS',
+        renewals: 'CUSTOM',
         expansion: 'CUSTOM',
       };
       const template = BOARD_TEMPLATES[templateBySlug[boardDef.slug] ?? 'CUSTOM'];
@@ -315,7 +369,7 @@ export const BoardCreationWizard: React.FC<BoardCreationWizardProps> = ({
         ['sales', 'onboarding'],
         ['onboarding', 'cs'],
         ['cs', null],
-        // expansion intentionally left unlinked
+        // renewals + expansion intentionally left unlinked
       ];
 
       for (const [from, to] of chain) {
@@ -908,17 +962,39 @@ export const BoardCreationWizard: React.FC<BoardCreationWizardProps> = ({
                     <div className="flex items-center gap-4 mb-8">
                       <div className="h-px flex-1 bg-slate-300 dark:bg-white/10" />
                       <span className="text-xs font-bold text-slate-400 uppercase tracking-widest">
-                        Jornada do Cliente ({OFFICIAL_JOURNEYS[selectedPlaybookId].boards.length}{' '}
+                        Jornada do Cliente ({(getJourneyForInstall(selectedPlaybookId)?.boards ?? OFFICIAL_JOURNEYS[selectedPlaybookId].boards).length}{' '}
                         Etapas)
                       </span>
                       <div className="h-px flex-1 bg-slate-300 dark:bg-white/10" />
                     </div>
 
+                    {selectedPlaybookId === 'INFOPRODUCER' && (
+                      <div className="mb-6 p-4 rounded-2xl border border-slate-200 dark:border-white/10 bg-white dark:bg-dark-card">
+                        <div className="flex items-start gap-3">
+                          <input
+                            id="include-renewals"
+                            type="checkbox"
+                            checked={includeSubscriptionRenewals}
+                            onChange={e => setIncludeSubscriptionRenewals(e.target.checked)}
+                            className="mt-1 h-4 w-4 rounded border-slate-300 text-primary-600 focus:ring-primary-500"
+                          />
+                          <div className="flex-1">
+                            <label htmlFor="include-renewals" className="font-semibold text-slate-900 dark:text-white">
+                              Incluir Renovações (Assinatura)
+                            </label>
+                            <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
+                              Adiciona um board opcional para controlar renovações com antecedência (180/120/90/60/30 dias).
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
                     <div className="space-y-8 relative">
                       {/* Vertical Line - Connected to cards */}
                       <div className="absolute left-6 top-8 bottom-8 w-0.5 bg-slate-200 dark:bg-white/10" />
 
-                      {OFFICIAL_JOURNEYS[selectedPlaybookId].boards.map((board, index) => (
+                      {(getJourneyForInstall(selectedPlaybookId)?.boards ?? OFFICIAL_JOURNEYS[selectedPlaybookId].boards).map((board, index) => (
                         <div key={index} className="relative pl-20 group">
                           {/* Number Bubble - Vertically Centered */}
                           <div className="absolute left-0 top-1/2 -translate-y-1/2 w-12 h-12 rounded-full bg-white dark:bg-dark-card border-2 border-slate-200 dark:border-white/10 flex items-center justify-center text-lg font-bold text-slate-400 shadow-sm z-10 group-hover:border-primary-500 group-hover:text-primary-600 dark:group-hover:text-primary-400 group-hover:scale-110 transition-all duration-300">
@@ -938,7 +1014,7 @@ export const BoardCreationWizard: React.FC<BoardCreationWizardProps> = ({
                                   </span>
                                 )}
                                 {index ===
-                                  OFFICIAL_JOURNEYS[selectedPlaybookId].boards.length - 1 && (
+                                  (getJourneyForInstall(selectedPlaybookId)?.boards ?? OFFICIAL_JOURNEYS[selectedPlaybookId].boards).length - 1 && (
                                     <span className="px-2.5 py-1 rounded-full bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-400 text-[10px] font-bold uppercase tracking-wide">
                                       Fim
                                     </span>
