@@ -196,6 +196,7 @@ export async function listSupabaseOrganizationProjects(params: {
   | {
       ok: true;
       projects: Array<{ ref: string; name: string; region?: string; status?: string; organizationSlug?: string }>;
+      pagination?: { count?: number; limit?: number; offset?: number };
       response: unknown;
     }
   | { ok: false; error: string; status?: number; response?: unknown }
@@ -232,7 +233,67 @@ export async function listSupabaseOrganizationProjects(params: {
     }))
     .filter((p) => p.ref && p.name);
 
-  return { ok: true, projects, response: res.data };
+  const pagination = payload?.pagination && typeof payload.pagination === 'object'
+    ? {
+        count: typeof payload.pagination.count === 'number' ? payload.pagination.count : undefined,
+        limit: typeof payload.pagination.limit === 'number' ? payload.pagination.limit : undefined,
+        offset: typeof payload.pagination.offset === 'number' ? payload.pagination.offset : undefined,
+      }
+    : undefined;
+
+  return { ok: true, projects, pagination, response: res.data };
+}
+
+export async function listAllSupabaseOrganizationProjects(params: {
+  accessToken: string;
+  organizationSlug: string;
+  statuses?: string[];
+  search?: string;
+}): Promise<
+  | {
+      ok: true;
+      projects: Array<{ ref: string; name: string; region?: string; status?: string; organizationSlug?: string }>;
+      response: unknown[];
+    }
+  | { ok: false; error: string; status?: number; response?: unknown }
+> {
+  const limit = 200;
+  let offset = 0;
+  const all: Array<{ ref: string; name: string; region?: string; status?: string; organizationSlug?: string }> = [];
+  const responses: unknown[] = [];
+
+  for (let page = 0; page < 50; page++) {
+    const res = await listSupabaseOrganizationProjects({
+      accessToken: params.accessToken,
+      organizationSlug: params.organizationSlug,
+      statuses: params.statuses,
+      search: params.search,
+      limit,
+      offset,
+    });
+    if (!res.ok) return res;
+    responses.push(res.response);
+    all.push(...res.projects);
+
+    const count = res.pagination?.count;
+    const pageSize = res.projects.length;
+    if (typeof count === 'number') {
+      if (all.length >= count) break;
+    }
+    if (pageSize < limit) break;
+    offset += limit;
+  }
+
+  // Dedupe by ref (defensive)
+  const seen = new Set<string>();
+  const projects = all.filter((p) => {
+    if (!p.ref) return false;
+    if (seen.has(p.ref)) return false;
+    seen.add(p.ref);
+    return true;
+  });
+
+  return { ok: true, projects, response: responses };
 }
 
 export async function createSupabaseProject(params: {

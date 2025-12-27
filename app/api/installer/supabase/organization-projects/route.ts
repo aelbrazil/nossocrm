@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { isAllowedOrigin } from '@/lib/security/sameOrigin';
 import {
   getSupabaseOrganization,
-  listSupabaseOrganizationProjects,
+  listAllSupabaseOrganizationProjects,
 } from '@/lib/installer/edgeFunctions';
 
 function json<T>(body: T, status = 200): Response {
@@ -45,11 +45,10 @@ export async function POST(req: Request) {
   const org = await getSupabaseOrganization({ accessToken, organizationSlug });
   if (!org.ok) return json({ error: org.error, status: org.status }, org.status || 500);
 
-  const projects = await listSupabaseOrganizationProjects({
+  const projects = await listAllSupabaseOrganizationProjects({
     accessToken,
     organizationSlug,
     statuses: parsed.data.statuses,
-    limit: 200,
   });
   if (!projects.ok) return json({ error: projects.error, status: projects.status }, projects.status || 500);
 

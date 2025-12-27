@@ -52,6 +52,7 @@
       - pausar projeto via `POST /v1/projects/{ref}/pause` (reversível)
       - deletar projeto via `DELETE /v1/projects/{ref}` (destrutivo; exige confirmação digitando o `ref`)
     - Detalhe técnico: o Wizard usa `GET /v1/organizations/{slug}` para exibir o `plan` e `GET /v1/organizations/{slug}/projects` (com filtro de status) para contar/mostrar projetos por org.
+    - Fix: lista de projetos ativos agora mostra **todos os itens** (com scroll) e ao trocar de organização a UI **invalida cache e refaz fetch automaticamente**.
 
 - **Build (fix)**:
   - Corrigidos erros de typecheck no build (`next build`):

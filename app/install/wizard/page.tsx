@@ -949,6 +949,12 @@ export default function InstallWizardPage() {
                               setSupabaseSelectedOrgSlug(slug);
                               setSupabaseCreateOrgSlug(slug);
                               setSupabaseSelectedProjectRef('');
+                              setSupabaseSelectedOrgPlan(null);
+                              setSupabaseOrgProjects([]);
+                              setSupabaseOrgProjectsLoadedKey('');
+                              if (slug) {
+                                void loadSupabaseOrganizationProjects(slug);
+                              }
                             }}
                             className="w-full bg-white dark:bg-slate-900/50 border border-slate-300 dark:border-slate-700 rounded-xl px-4 py-3 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary-500/50 focus:border-primary-500"
                           >
@@ -1011,7 +1017,8 @@ export default function InstallWizardPage() {
                                 Se você quiser criar um projeto novo, volte e escolha “Criar novo” — e, se faltar slot, pause/deleite um antigo.
                               </div>
                               <div className="pt-1 space-y-2">
-                                {supabaseActiveProjects.slice(0, 6).map((p) => (
+                                <div className="max-h-64 overflow-auto space-y-2 pr-1">
+                                {supabaseActiveProjects.map((p) => (
                                   <div
                                     key={p.ref}
                                     className="flex items-center justify-between gap-2 rounded-md border border-amber-200/60 dark:border-amber-500/20 bg-white/50 dark:bg-slate-900/30 p-2"
@@ -1047,11 +1054,7 @@ export default function InstallWizardPage() {
                                     </div>
                                   </div>
                                 ))}
-                                {supabaseActiveProjects.length > 6 ? (
-                                  <div className="text-[11px] text-slate-600 dark:text-slate-300">
-                                    Mostrando 6 de {supabaseActiveProjects.length} ativos.
-                                  </div>
-                                ) : null}
+                                </div>
                               </div>
                             </div>
                           ) : null}
@@ -1198,7 +1201,8 @@ export default function InstallWizardPage() {
                               </div>
 
                               <div className="pt-1 space-y-2">
-                                {supabaseActiveProjects.slice(0, 6).map((p) => (
+                                <div className="max-h-64 overflow-auto space-y-2 pr-1">
+                                {supabaseActiveProjects.map((p) => (
                                   <div
                                     key={p.ref}
                                     className="flex items-center justify-between gap-2 rounded-md border border-slate-200 dark:border-slate-700 bg-white/60 dark:bg-slate-900/30 p-2"
@@ -1240,11 +1244,7 @@ export default function InstallWizardPage() {
                                     </div>
                                   </div>
                                 ))}
-                                {supabaseActiveProjects.length > 6 ? (
-                                  <div className="text-[11px] text-slate-600 dark:text-slate-300">
-                                    Mostrando 6 de {supabaseActiveProjects.length} ativos.
-                                  </div>
-                                ) : null}
+                                </div>
                               </div>
                             </div>
                           ) : null}
