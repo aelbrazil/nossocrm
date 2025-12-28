@@ -10,6 +10,7 @@ import {
   resolveSupabaseApiKeys,
   resolveSupabaseDbUrlViaCliLoginRole,
   setSupabaseEdgeFunctionSecrets,
+  waitForSupabaseProjectReady,
   type SupabaseFunctionDeployResult,
 } from '@/lib/installer/edgeFunctions';
 
@@ -202,6 +203,28 @@ export async function POST(req: Request) {
       vercel.teamId || undefined
     );
     finishStep('vercel_envs', 'Environment variables configured (installer will be disabled).');
+
+    startStep('supabase_project_ready');
+    if (resolvedAccessToken && resolvedProjectRef) {
+      const ready = await waitForSupabaseProjectReady({
+        accessToken: resolvedAccessToken,
+        projectRef: resolvedProjectRef,
+        timeoutMs: 210_000,
+        pollMs: 4_000,
+      });
+      if (!ready.ok) {
+        finishStepWithStatus('supabase_project_ready', 'error', ready.error);
+        return json({ ok: false, steps, error: ready.error }, 500);
+      }
+      finishStep('supabase_project_ready', `Project is ready (${ready.status}).`);
+    } else {
+      // No Management API token -> can't verify readiness.
+      finishStepWithStatus(
+        'supabase_project_ready',
+        'warning',
+        'Skipped (no Management API token).'
+      );
+    }
 
     startStep('supabase_migrations');
     await runSchemaMigration(resolvedDbUrl);

@@ -210,6 +210,8 @@ export default function InstallWizardPage() {
   const [supabaseCreateRegion, setSupabaseCreateRegion] = useState<'americas' | 'emea' | 'apac'>('americas');
   const [supabaseCreating, setSupabaseCreating] = useState(false);
   const [supabaseCreateError, setSupabaseCreateError] = useState<string | null>(null);
+  const [supabaseProvisioning, setSupabaseProvisioning] = useState(false);
+  const [supabaseProvisioningStatus, setSupabaseProvisioningStatus] = useState<string | null>(null);
 
   const [edgeFunctionsPreview, setEdgeFunctionsPreview] = useState<
     Array<{ slug: string; verify_jwt: boolean }>
@@ -230,6 +232,10 @@ export default function InstallWizardPage() {
   const [installing, setInstalling] = useState(false);
   const [result, setResult] = useState<RunResult | null>(null);
   const [runError, setRunError] = useState<string | null>(null);
+
+  // Cinematic: live telemetry while waiting (project provisioning).
+  const [installSupabaseProjectStatus, setInstallSupabaseProjectStatus] = useState<string | null>(null);
+  const [installSupabaseProjectStatusAtMs, setInstallSupabaseProjectStatusAtMs] = useState<number | null>(null);
 
   // Cinematic: subtle parallax (desktop-first). Kept tiny to avoid nausea.
   const mx = useMotionValue(0);
@@ -418,7 +424,9 @@ export default function InstallWizardPage() {
       (supabaseAccessToken.trim() ||
         (supabaseAnonKey.trim() && supabaseServiceKey.trim() && supabaseDbUrl.trim())) &&
       // If Edge Functions are enabled, PAT is mandatory.
-      (!supabaseDeployEdgeFunctions || supabaseAccessToken.trim())
+      (!supabaseDeployEdgeFunctions || supabaseAccessToken.trim()) &&
+      // Don't allow proceeding while project is still provisioning.
+      !supabaseProvisioning
   );
 
   const adminReady = Boolean(
@@ -525,6 +533,89 @@ export default function InstallWizardPage() {
     wizardSteps.length > 1
       ? Math.round((currentStep / (wizardSteps.length - 1)) * 100)
       : 0;
+
+  const inferCineBeat = useMemo(() => {
+    const raw = String(installSupabaseProjectStatus || '').trim();
+    const normalized = raw.toUpperCase();
+    const supabaseActive = normalized.startsWith('ACTIVE');
+    const step = expectedInstallTimeline[Math.min(cineTimelineIndex, expectedInstallTimeline.length - 1)]?.id || '';
+
+    if (installing && !result) {
+      if (!supabaseActive && currentStep >= 1) {
+        return {
+          title: 'Aquecendo motores do Supabase',
+          subtitle:
+            raw
+              ? `Status do projeto: ${raw}. Preparando Storage e banco…`
+              : 'Status do projeto: verificando… Preparando Storage e banco…',
+        };
+      }
+      if (step.includes('supabase')) {
+        return {
+          title: 'Alinhando órbita',
+          subtitle: 'Sincronizando schema, chaves e funções — silêncio de cockpit.',
+        };
+      }
+      return { title: 'Trajetória em curso', subtitle: 'Ajustando variáveis, rotas e ignição.' };
+    }
+
+    if (result?.ok) return { title: 'Aterrissagem confirmada', subtitle: 'Aplausos no controle de missão.' };
+    if (runError) return { title: 'Anomalia detectada', subtitle: 'Vamos corrigir e relançar.' };
+    return { title: 'Missão finalizada', subtitle: 'Revise os detalhes antes de seguir.' };
+  }, [
+    cineTimelineIndex,
+    currentStep,
+    expectedInstallTimeline,
+    installing,
+    installSupabaseProjectStatus,
+    result,
+    runError,
+  ]);
+
+  useEffect(() => {
+    // Live telemetry: poll project status while installing (keeps user feeling "real time").
+    if (!showInstallOverlay) return;
+    if (!installing || result) return;
+    if (!supabaseAccessToken.trim() || !supabaseProjectRef.trim()) return;
+
+    let cancelled = false;
+    const poll = async () => {
+      try {
+        const res = await fetch('/api/installer/supabase/project-status', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({
+            installerToken: installerToken.trim() || undefined,
+            accessToken: supabaseAccessToken.trim(),
+            projectRef: supabaseProjectRef.trim(),
+          }),
+        });
+        const data = await res.json().catch(() => null);
+        if (!res.ok) return;
+        const status = typeof data?.status === 'string' ? data.status : null;
+        if (!cancelled) {
+          setInstallSupabaseProjectStatus(status);
+          setInstallSupabaseProjectStatusAtMs(Date.now());
+        }
+      } catch {
+        // ignore
+      }
+    };
+
+    void poll();
+    const handle = setInterval(poll, 4000);
+    return () => {
+      cancelled = true;
+      clearInterval(handle);
+    };
+  }, [
+    installing,
+    installerToken,
+    result,
+    showInstallOverlay,
+    supabaseAccessToken,
+    supabaseProjectRef,
+  ]);
 
   const goNext = () => {
     if (!stepReady[currentStep]) return;
@@ -1125,6 +1216,32 @@ export default function InstallWizardPage() {
             mode: 'transaction_pooler',
           })
         );
+      }
+
+      // Wait for Supabase to finish provisioning the project before resolving/migrating.
+      if (ref) {
+        setSupabaseProvisioning(true);
+        setSupabaseProvisioningStatus('coming_up');
+        const t0 = Date.now();
+        const timeoutMs = 210_000;
+        while (Date.now() - t0 < timeoutMs) {
+          const st = await fetch('/api/installer/supabase/project-status', {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({
+              installerToken: installerToken.trim() || undefined,
+              accessToken: supabaseAccessToken.trim(),
+              projectRef: ref,
+            }),
+          });
+          const stData = await st.json().catch(() => null);
+          const rawStatus = typeof stData?.status === 'string' ? stData.status : '';
+          const normalized = String(rawStatus || '').toUpperCase();
+          setSupabaseProvisioningStatus(rawStatus || 'coming_up');
+          if (normalized.startsWith('ACTIVE')) break;
+          await new Promise((r) => setTimeout(r, 4000));
+        }
+        setSupabaseProvisioning(false);
       }
 
       // Immediately resolve keys/db.
@@ -2042,6 +2159,47 @@ export default function InstallWizardPage() {
                           <Loader2 size={16} className="mt-0.5 animate-spin" />
                           <span>Resolvendo keys + DB automaticamente…</span>
                         </div>
+                      ) : supabaseProvisioning ? (
+                        <div className="rounded-lg border border-cyan-200 dark:border-cyan-500/20 bg-cyan-50/80 dark:bg-cyan-900/20 p-3 text-cyan-900 dark:text-cyan-100 text-sm overflow-hidden relative">
+                          <motion.div
+                            aria-hidden="true"
+                            className="absolute inset-0 opacity-[0.16]"
+                            style={{
+                              backgroundImage:
+                                'repeating-linear-gradient(90deg, rgba(34,211,238,0.55) 0px, rgba(34,211,238,0.55) 1px, transparent 10px, transparent 22px)',
+                              maskImage:
+                                'radial-gradient(420px circle at 20% 50%, rgba(0,0,0,1) 0%, rgba(0,0,0,0) 70%)',
+                            }}
+                            animate={{ backgroundPositionX: ['0px', '260px'] }}
+                            transition={{ duration: 6, ease: 'linear', repeat: Infinity }}
+                          />
+                          <div className="relative flex items-start justify-between gap-3">
+                            <div className="flex items-start gap-2">
+                              <Loader2 size={16} className="mt-0.5 animate-spin" />
+                              <div className="min-w-0">
+                                <div className="font-semibold">Project is coming up</div>
+                                <div className="text-xs opacity-80 mt-0.5">
+                                  {supabaseProvisioningStatus
+                                    ? `Status: ${supabaseProvisioningStatus}`
+                                    : 'Status: verificando…'}{' '}
+                                  — aguardando o Supabase terminar de provisionar (isso pode levar 1–3 min).
+                                </div>
+                              </div>
+                            </div>
+                            <motion.div
+                              aria-hidden="true"
+                              className="h-8 w-8 rounded-full border border-cyan-400/30 bg-cyan-300/10"
+                              animate={{
+                                boxShadow: [
+                                  '0 0 0 rgba(34,211,238,0)',
+                                  '0 0 20px rgba(34,211,238,0.35)',
+                                  '0 0 0 rgba(34,211,238,0)',
+                                ],
+                              }}
+                              transition={{ duration: 1.8, repeat: Infinity, ease: 'easeInOut' }}
+                            />
+                          </div>
+                        </div>
                       ) : supabaseResolvedOk ? (
                         <div className="flex items-start gap-2 rounded-lg border border-emerald-200 dark:border-emerald-500/20 bg-emerald-50 dark:bg-emerald-900/20 p-3 text-emerald-700 dark:text-emerald-300 text-sm">
                           <CheckCircle2 size={16} className="mt-0.5" />
@@ -2477,7 +2635,35 @@ export default function InstallWizardPage() {
               transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
               className="relative w-[min(880px,92vw)] rounded-2xl border border-white/10 bg-slate-950/70 shadow-2xl overflow-hidden"
             >
+              {/* Cinematic stage lights */}
               <div className="absolute inset-0 pointer-events-none bg-[radial-gradient(900px_circle_at_20%_0%,rgba(34,211,238,0.18),transparent_55%),radial-gradient(700px_circle_at_100%_10%,rgba(45,212,191,0.12),transparent_55%)]" />
+              {/* Warp scanlines */}
+              <motion.div
+                aria-hidden="true"
+                className="absolute inset-0 pointer-events-none opacity-[0.14]"
+                style={{
+                  backgroundImage:
+                    'repeating-linear-gradient(180deg, rgba(255,255,255,0.10) 0px, rgba(255,255,255,0.10) 1px, transparent 6px, transparent 14px)',
+                  maskImage:
+                    'radial-gradient(900px circle at 35% 0%, rgba(0,0,0,1) 0%, rgba(0,0,0,0) 62%)',
+                }}
+                animate={{ backgroundPositionY: ['0px', '-260px'] }}
+                transition={{ duration: 9, ease: 'linear', repeat: Infinity }}
+              />
+              {/* Star drift */}
+              <motion.div
+                aria-hidden="true"
+                className="absolute inset-0 pointer-events-none opacity-[0.22]"
+                style={{
+                  backgroundImage:
+                    'radial-gradient(circle, rgba(255,255,255,0.35) 1px, transparent 1px)',
+                  backgroundSize: '26px 26px',
+                  maskImage:
+                    'radial-gradient(1000px circle at 50% 30%, rgba(0,0,0,1) 0%, rgba(0,0,0,0) 62%)',
+                }}
+                animate={{ backgroundPositionX: ['0px', '120px'], backgroundPositionY: ['0px', '-80px'] }}
+                transition={{ duration: 18, ease: 'linear', repeat: Infinity }}
+              />
 
               <div className="relative p-6 sm:p-7">
                 <div className="flex items-start justify-between gap-4">
@@ -2485,17 +2671,20 @@ export default function InstallWizardPage() {
                     <div className="text-xs font-semibold uppercase tracking-wider text-slate-400">
                       Piloto automático
                     </div>
-                    <div className="text-xl font-bold text-white tracking-tight">
-                      Preparando seu novo mundo
-                    </div>
+                    <AnimatePresence mode="wait">
+                      <motion.div
+                        key={inferCineBeat.title}
+                        initial={{ opacity: 0, y: 6, filter: 'blur(8px)' }}
+                        animate={{ opacity: 1, y: 0, filter: 'blur(0px)' }}
+                        exit={{ opacity: 0, y: -6, filter: 'blur(8px)' }}
+                        transition={{ duration: 0.25, ease: [0.22, 1, 0.36, 1] }}
+                        className="text-xl font-bold text-white tracking-tight"
+                      >
+                        {inferCineBeat.title}
+                      </motion.div>
+                    </AnimatePresence>
                     <div className="text-sm text-slate-300">
-                      {installing
-                        ? 'Executando instalação… você pode só observar.'
-                        : runError
-                          ? 'Encontramos um problema. Você pode corrigir e tentar de novo.'
-                          : result?.ok
-                            ? 'Tudo pronto. Agora começa.'
-                            : 'Instalação finalizada com avisos.'}
+                      {inferCineBeat.subtitle}
                     </div>
                   </div>
 
@@ -2583,6 +2772,38 @@ export default function InstallWizardPage() {
                         <span>Tempo: —</span>
                       )}
                     </div>
+
+                    {installing && !result ? (
+                      <div className="rounded-lg border border-cyan-500/20 bg-cyan-500/10 p-3 text-sm text-cyan-100">
+                        <div className="flex items-center justify-between gap-3">
+                          <div className="min-w-0">
+                            <div className="text-xs uppercase tracking-wider text-cyan-200/80 font-semibold">
+                              Supabase — provisioning
+                            </div>
+                            <div className="mt-0.5 text-sm text-cyan-100 truncate">
+                              {installSupabaseProjectStatus
+                                ? `Status do projeto: ${installSupabaseProjectStatus}`
+                                : 'Status do projeto: verificando…'}
+                            </div>
+                            <div className="mt-1 text-[11px] text-cyan-100/70">
+                              {installSupabaseProjectStatusAtMs
+                                ? `Última leitura: ${Math.max(
+                                    0,
+                                    Math.round((Date.now() - installSupabaseProjectStatusAtMs) / 1000)
+                                  )}s atrás`
+                                : 'Última leitura: —'}
+                            </div>
+                          </div>
+                          <motion.div
+                            aria-hidden="true"
+                            className="h-8 w-8 rounded-full border border-cyan-300/30 bg-cyan-300/10"
+                            animate={{ boxShadow: ['0 0 0 rgba(34,211,238,0)', '0 0 22px rgba(34,211,238,0.35)', '0 0 0 rgba(34,211,238,0)'] }}
+                            transition={{ duration: 1.8, repeat: Infinity, ease: 'easeInOut' }}
+                          />
+                        </div>
+                      </div>
+                    ) : null}
+
                     {runError ? (
                       <div className="rounded-lg border border-red-500/20 bg-red-500/10 p-3 text-sm text-red-200">
                         {runError}
@@ -2627,6 +2848,37 @@ export default function InstallWizardPage() {
                     </div>
                   </div>
                 </div>
+
+                {/* “Aplausos” (subtle burst) */}
+                <AnimatePresence>
+                  {result?.ok ? (
+                    <motion.div
+                      key="applause"
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      exit={{ opacity: 0 }}
+                      transition={{ duration: 0.25 }}
+                      className="pointer-events-none absolute inset-0"
+                      aria-hidden="true"
+                    >
+                      <div className="absolute inset-0 bg-[radial-gradient(900px_circle_at_50%_30%,rgba(34,211,238,0.18),transparent_60%)]" />
+                      {Array.from({ length: 14 }).map((_, i) => {
+                        const angle = (Math.PI * 2 * i) / 14;
+                        const dx = Math.cos(angle) * 210;
+                        const dy = Math.sin(angle) * 120;
+                        return (
+                          <motion.span
+                            key={i}
+                            className="absolute left-1/2 top-[34%] h-1 w-10 rounded-full bg-linear-to-r from-cyan-200/0 via-cyan-200/80 to-cyan-200/0"
+                            initial={{ opacity: 0, x: 0, y: 0, scaleX: 0.4, rotate: (angle * 180) / Math.PI }}
+                            animate={{ opacity: [0, 1, 0], x: dx, y: dy, scaleX: [0.4, 1, 0.6] }}
+                            transition={{ duration: 0.95, delay: 0.06 * i, ease: [0.22, 1, 0.36, 1] }}
+                          />
+                        );
+                      })}
+                    </motion.div>
+                  ) : null}
+                </AnimatePresence>
               </div>
             </motion.div>
           </motion.div>

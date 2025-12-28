@@ -167,8 +167,12 @@ Deno.serve(async (req) => {
   const secretHeader = getSecretFromRequest(req);
   if (!secretHeader) return json(401, { error: "Secret ausente" });
 
-  const supabaseUrl = Deno.env.get("SUPABASE_URL");
-  const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+  // Prefer custom secrets (installer-managed) to avoid reserved `SUPABASE_` prefix restrictions.
+  // Fallback to Supabase-provided envs when available.
+  const supabaseUrl = Deno.env.get("CRM_SUPABASE_URL") ?? Deno.env.get("SUPABASE_URL");
+  const serviceKey =
+    Deno.env.get("CRM_SUPABASE_SERVICE_ROLE_KEY") ??
+    Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
   if (!supabaseUrl || !serviceKey) {
     return json(500, { error: "Supabase não configurado no runtime" });
   }

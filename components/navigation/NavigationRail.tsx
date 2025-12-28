@@ -48,6 +48,7 @@ export function NavigationRail({ onOpenMore }: NavigationRailProps) {
                   'focus-visible-ring'
                 )}
                 title={item.label}
+                aria-label={item.label}
               >
                 <Icon className="h-5 w-5" aria-hidden="true" />
               </button>
@@ -66,6 +67,7 @@ export function NavigationRail({ onOpenMore }: NavigationRailProps) {
               )}
               aria-current={isActive ? 'page' : undefined}
               title={item.label}
+              aria-label={item.label}
             >
               <Icon className={cn('h-5 w-5', isActive ? 'text-primary-500' : '')} aria-hidden="true" />
             </Link>

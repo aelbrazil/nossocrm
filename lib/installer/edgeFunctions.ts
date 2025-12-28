@@ -75,6 +75,101 @@ async function sleep(ms: number) {
   await new Promise((r) => setTimeout(r, ms));
 }
 
+export async function getSupabaseProject(params: {
+  accessToken: string;
+  projectRef: string;
+}): Promise<
+  | {
+      ok: true;
+      project: { ref: string; name?: string; status?: string; region?: string; dbHost?: string };
+      response: unknown;
+    }
+  | { ok: false; error: string; status?: number; response?: unknown }
+> {
+  const res = await supabaseManagementFetch(
+    `/v1/projects/${encodeURIComponent(params.projectRef)}`,
+    params.accessToken,
+    { method: 'GET' }
+  );
+  if (!res.ok) return { ok: false, error: res.error, status: res.status, response: res.data };
+
+  const data = res.data as any;
+  const status =
+    typeof data?.status === 'string'
+      ? data.status
+      : typeof data?.project_status === 'string'
+        ? data.project_status
+        : typeof data?.projectStatus === 'string'
+          ? data.projectStatus
+          : undefined;
+
+  const dbHost =
+    typeof data?.database?.host === 'string'
+      ? data.database.host
+      : typeof data?.db_host === 'string'
+        ? data.db_host
+        : typeof data?.dbHost === 'string'
+          ? data.dbHost
+          : undefined;
+
+  return {
+    ok: true,
+    project: {
+      ref: params.projectRef,
+      name: typeof data?.name === 'string' ? data.name : undefined,
+      status,
+      region: typeof data?.region === 'string' ? data.region : undefined,
+      dbHost: dbHost?.trim() || undefined,
+    },
+    response: res.data,
+  };
+}
+
+export async function waitForSupabaseProjectReady(params: {
+  accessToken: string;
+  projectRef: string;
+  timeoutMs?: number;
+  pollMs?: number;
+}): Promise<
+  | { ok: true; status: string; response?: unknown }
+  | { ok: false; error: string; lastStatus?: string; response?: unknown }
+> {
+  const timeoutMs = typeof params.timeoutMs === 'number' ? params.timeoutMs : 180_000;
+  const pollMs = typeof params.pollMs === 'number' ? params.pollMs : 4_000;
+
+  const t0 = Date.now();
+  let lastStatus: string | undefined = undefined;
+  let lastResponse: unknown | undefined = undefined;
+
+  while (Date.now() - t0 < timeoutMs) {
+    const res = await getSupabaseProject({ accessToken: params.accessToken, projectRef: params.projectRef });
+    if (!res.ok) {
+      // transient 404/5xx during provisioning happens; retry while within timeout
+      lastResponse = res.response;
+      await sleep(pollMs);
+      continue;
+    }
+
+    lastResponse = res.response;
+    lastStatus = res.project.status || '';
+    const normalized = String(lastStatus || '').toUpperCase();
+    if (normalized.startsWith('ACTIVE')) {
+      return { ok: true, status: String(lastStatus || 'ACTIVE'), response: lastResponse };
+    }
+
+    await sleep(pollMs);
+  }
+
+  return {
+    ok: false,
+    error:
+      `Projeto Supabase ainda está subindo (${lastStatus || 'status desconhecido'}). ` +
+      'Aguarde um pouco e tente novamente.',
+    lastStatus,
+    response: lastResponse,
+  };
+}
+
 async function withRetry<T>(
   fn: () => Promise<T>,
   opts: { maxAttempts: number; baseDelayMs: number }
@@ -684,9 +779,11 @@ export async function setSupabaseEdgeFunctionSecrets(params: {
     {
       method: 'POST',
       body: JSON.stringify([
-        { name: 'SUPABASE_URL', value: params.supabaseUrl },
-        { name: 'SUPABASE_ANON_KEY', value: params.anonKey },
-        { name: 'SUPABASE_SERVICE_ROLE_KEY', value: params.serviceRoleKey },
+        // Supabase Management API rejects secrets starting with `SUPABASE_` (reserved prefix).
+        // We use CRM_* and our Edge Functions read these first (with fallback).
+        { name: 'CRM_SUPABASE_URL', value: params.supabaseUrl },
+        { name: 'CRM_SUPABASE_ANON_KEY', value: params.anonKey },
+        { name: 'CRM_SUPABASE_SERVICE_ROLE_KEY', value: params.serviceRoleKey },
       ]),
     }
   );

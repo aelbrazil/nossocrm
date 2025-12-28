@@ -7,6 +7,7 @@
   - Criada a base de **Sheets** para fluxos mobile-first: `components/ui/Sheet.tsx` e `components/ui/FullscreenSheet.tsx` (com focus trap + ESC + safe-area bottom).
   - Criada configuração de navegação para **BottomNav** e “Mais” (`components/navigation/navConfig.ts`), espelhando destinos secundários do sidebar.
   - Implementada navegação **BottomNav (mobile)** + sheet “Mais” (ActionSheet) e integrada ao app shell em `components/Layout.tsx`, com padding automático via CSS vars (`--app-bottom-nav-height` / `--app-safe-area-bottom`) para evitar conteúdo coberto.
+  - **A11y**: `NavigationRail` (tablet) agora expõe `aria-label` nos links/botões de ícone para melhor suporte a leitores de tela.
 
 ## 27/12/2025
 
@@ -34,7 +35,7 @@
   - Novo step **`supabase_edge_functions`** no instalador: seta secrets e faz deploy automático das Edge Functions do repositório (`supabase/functions/*`).
   - Inputs novos no Wizard: `supabase.accessToken` (PAT), `supabase.projectRef` (opcional; inferido de `supabase.url` quando vazio) e `supabase.deployEdgeFunctions` (default `true`).
   - Detalhes técnicos:
-    - Secrets via `POST /v1/projects/{ref}/secrets` (cria `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`).
+    - Secrets via `POST /v1/projects/{ref}/secrets` (**prefixo `SUPABASE_` é reservado e rejeitado pela API**) — agora o instalador cria `CRM_SUPABASE_URL`, `CRM_SUPABASE_ANON_KEY`, `CRM_SUPABASE_SERVICE_ROLE_KEY` e as Edge Functions leem esses valores (com fallback).
     - Deploy via `POST /v1/projects/{ref}/functions/deploy?slug=<slug>` com `multipart/form-data` e `metadata` incluindo `entrypoint_path`, `verify_jwt` (lido de `supabase/config.toml`, default `true`) e `import_map_path` quando existir `import_map.json`.
     - Resposta do instalador agora inclui `functions[]` com status por slug (`ok`/`error`); o step vira `warning` quando alguma function falha.
 
@@ -51,6 +52,11 @@
     - Auto-resolve roda automaticamente (debounce) quando PAT + (URL ou `projectRef`) estão preenchidos.
     - Fix (Supabase resolve loop): quando o DB ainda não está pronto em projetos recém-criados, o auto-resolve agora usa **backoff + limite de tentativas** (e evita request 400 quando ainda não há `projectRef/url`), mostrando mensagem “Aguardando o banco ficar pronto…” em vez de ficar martelando a API.
     - Fix (Supabase IPv4/IPv6): para evitar o erro “Not IPv4 compatible”/`ipv6 address is not defined`, o instalador passou a **preferir Transaction Pooler (porta 6543)** ao montar `dbUrl` (no create-flow, usando o `db_pass` informado; e no backend, quando consegue gerar credenciais via `cli/login-role`).
+    - Fix (Provisioning / “Project is coming up”): o instalador agora **espera o projeto ficar ACTIVE** antes de rodar migrations/Edge Functions:
+      - Frontend: após criar projeto, o wizard faz polling em `POST /api/installer/supabase/project-status`.
+      - Backend: o `POST /api/installer/run` executa um step `supabase_project_ready` com timeout e mensagem clara.
+    - Fix (Storage): **não pulamos Storage**. Em vez disso, o passo de migrations agora **espera o Storage ficar disponível** (`storage.buckets` existir) antes de executar o SQL, evitando o erro `relation "storage.buckets" does not exist`.
+    - UX (cinematográfico — espera com emoção): durante provisioning/espera, o wizard e o overlay “Piloto automático” agora exibem **telemetria viva** (polling do status do projeto) + animações “warp/scanlines” e microcopy estilo missão espacial; ao concluir com sucesso, há um **crescendo visual** (“aplausos” sutil).
     - Fix (Supabase migrations SSL): normalizado `dbUrl` removendo `sslmode` da query string e forçando conexão TLS “no-verify” via `pg` no step de migrations para evitar falhas `self-signed certificate in certificate chain` em redes com proxy/CA corporativa.
     - Preview de Edge Functions em `GET /api/installer/supabase/functions` (lista slugs + `verify_jwt` inferido).
   - Edge Functions:
