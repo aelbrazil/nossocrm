@@ -594,19 +594,13 @@ export async function POST(req: Request) {
         pollMs: 2_500,
         onTick: async ({ readyState, elapsedMs }) => {
           const fraction = Math.min(elapsedMs / 240_000, 0.95);
-          const prog = progress.partialProgress('wait_vercel_deploy', fraction);
+
+          // UI: mantém narrativa limpa; apenas avança a barra de progresso.
+          await sendPhase('wait_vercel_deploy', fraction);
+
+          // Console: telemetria detalhada (para debug)
           const sec = Math.max(0, Math.round(elapsedMs / 1000));
           const rs = String(readyState || 'DESCONHECIDO').toUpperCase();
-
-          // Emite uma fase com telemetria (deixa claro que estamos pollando a Vercel)
-          await sendEvent({
-            type: 'phase',
-            phase: 'landing',
-            title: 'Aterrissagem na Vercel',
-            subtitle: `Status do deploy: ${rs} • ${sec}s`,
-            progress: prog,
-          });
-
           console.log('[run-stream] wait_vercel_deploy:', rs, sec + 's');
         },
       });
