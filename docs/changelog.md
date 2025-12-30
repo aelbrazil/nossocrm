@@ -33,6 +33,11 @@
   - **Problema**: ao deslogar, o app shell continuava renderizando no `(protected)` e caía no fallback `"Usuário"`.
   - **Solução**: `components/Layout.tsx` agora verifica `user/loading` do `AuthContext` e, quando não autenticado, faz `router.replace('/login')` e interrompe o render.
 
+- **Boards — Crash ao clicar em um deal (hook order)**:
+  - **Problema**: ao abrir detalhes do deal em `/boards`, o app caía com “Application error” e console mostrava **React error #310**.
+  - **Causa**: `features/boards/components/Modals/DealDetailModal.tsx` chamava `useResponsiveMode()` **depois** de um `return null` condicional, quebrando a ordem de hooks quando o modal abria/fechava.
+  - **Solução**: mover `useResponsiveMode()` para antes do early return, garantindo ordem consistente de hooks.
+
 ## 29/12/2025
 
 - **Installer — Bloqueio de acesso após instalação completa**:

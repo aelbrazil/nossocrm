@@ -1,6 +1,7 @@
 import { defineConfig, globalIgnores } from "eslint/config";
 import nextVitals from "eslint-config-next/core-web-vitals";
 import nextTs from "eslint-config-next/typescript";
+import reactHooks from "eslint-plugin-react-hooks";
 
 const eslintConfig = defineConfig([
   ...nextVitals,
@@ -21,6 +22,9 @@ const eslintConfig = defineConfig([
 
   // Project-level rule tuning: keep lint useful, but avoid blocking on high-noise rules.
   {
+    plugins: {
+      "react-hooks": reactHooks,
+    },
     rules: {
       // Too noisy for this codebase right now; we enforce type safety via TS + runtime validation.
       // Keeping it enabled currently creates hundreds of warnings and blocks "zero-warning" workflows.
@@ -36,16 +40,8 @@ const eslintConfig = defineConfig([
       // Too pedantic for the current codebase (large JSX content with quotes).
       'react/no-unescaped-entities': 'off',
 
-      // React Compiler-specific rules (currently too disruptive for the project).
-      'react-hooks/preserve-manual-memoization': 'off',
-      'react-hooks/immutability': 'off',
-      // React Compiler-specific rules: disabled until we adopt the compiler broadly.
-      'react-hooks/purity': 'off',
-      'react-hooks/refs': 'warn',
-      'react-hooks/incompatible-library': 'off',
-
-      // Valid pattern in React; this rule creates lots of false positives in real apps.
-      'react-hooks/set-state-in-effect': 'off',
+      // Prevent hook-order bugs (e.g. hook called after an early return).
+      'react-hooks/rules-of-hooks': 'error',
 
       // This rule is great, but currently too noisy for this repo (many existing hook deps warnings).
       // We rely on code review + tests until we can clean it up and re-enable.

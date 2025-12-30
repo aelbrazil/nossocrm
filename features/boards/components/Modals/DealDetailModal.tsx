@@ -61,6 +61,9 @@ export const DealDetailModal: React.FC<DealDetailModalProps> = ({ dealId, isOpen
   // Accessibility: Return focus to trigger element when modal closes
   useFocusReturn({ enabled: isOpen });
 
+  const { mode } = useResponsiveMode();
+  const isMobile = mode === 'mobile';
+
   const {
     deals,
     contacts,
@@ -374,9 +377,6 @@ export const DealDetailModal: React.FC<DealDetailModalProps> = ({ dealId, isOpen
       onClose();
     }
   };
-
-  const { mode } = useResponsiveMode();
-  const isMobile = mode === 'mobile';
 
   const inner = (
     <>
